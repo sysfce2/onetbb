@@ -526,15 +526,6 @@ void task_arena_impl::initialize(d1::task_arena_base& ta) {
     // Enforce global market initialization to properly initialize soft limit
     (void)governor::get_thread_data();
 
-#if __TBB_ARENA_BINDING
-    numa_binding_observer* observer = construct_binding_observer(
-        static_cast<d1::task_arena*>(&ta), arena::num_arena_slots(ta.my_max_concurrency, ta.my_num_reserved_slots),
-        ta.my_numa_id, ta.core_type(), ta.max_threads_per_core());
-    if (observer) {
-        observer->on_scheduler_entry(true);
-    }
-#endif /*__TBB_ARENA_BINDING*/
-
     if (ta.my_max_concurrency < 1) {
 #if __TBB_ARENA_BINDING
         d1::constraints arena_constraints = d1::constraints{}
@@ -546,6 +537,15 @@ void task_arena_impl::initialize(d1::task_arena_base& ta) {
         ta.my_max_concurrency = (int)governor::default_num_threads();
 #endif /*!__TBB_ARENA_BINDING*/
     }
+
+#if __TBB_ARENA_BINDING
+    numa_binding_observer* observer = construct_binding_observer(
+        static_cast<d1::task_arena*>(&ta), arena::num_arena_slots(ta.my_max_concurrency, ta.my_num_reserved_slots),
+        ta.my_numa_id, ta.core_type(), ta.max_threads_per_core());
+    if (observer) {
+        observer->on_scheduler_entry(true);
+    }
+#endif /*__TBB_ARENA_BINDING*/
 
     __TBB_ASSERT(ta.my_arena.load(std::memory_order_relaxed) == nullptr, "Arena already initialized");
     unsigned priority_level = arena_priority_level(ta.my_priority);
