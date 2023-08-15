@@ -1,19 +1,8 @@
 /*
-    Copyright (c) 2005-2023 Intel Corporation
+  Copyright (C) 2005-2019 Intel Corporation
 
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
-
-        http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
+  SPDX-License-Identifier: GPL-2.0-only OR BSD-3-Clause
 */
-
 #ifndef _ITTNOTIFY_CONFIG_H_
 #define _ITTNOTIFY_CONFIG_H_
 
@@ -34,6 +23,10 @@
 #  define ITT_OS_FREEBSD   4
 #endif /* ITT_OS_FREEBSD */
 
+#ifndef ITT_OS_OPENBSD
+#  define ITT_OS_OPENBSD   5
+#endif /* ITT_OS_OPENBSD */
+
 #ifndef ITT_OS
 #  if defined WIN32 || defined _WIN32
 #    define ITT_OS ITT_OS_WIN
@@ -41,6 +34,8 @@
 #    define ITT_OS ITT_OS_MAC
 #  elif defined( __FreeBSD__ )
 #    define ITT_OS ITT_OS_FREEBSD
+#  elif defined( __OpenBSD__ )
+#    define ITT_OS ITT_OS_OPENBSD
 #  else
 #    define ITT_OS ITT_OS_LINUX
 #  endif
@@ -62,6 +57,10 @@
 #  define ITT_PLATFORM_FREEBSD 4
 #endif /* ITT_PLATFORM_FREEBSD */
 
+#ifndef ITT_PLATFORM_OPENBSD
+#  define ITT_PLATFORM_OPENBSD 5
+#endif /* ITT_PLATFORM_OPENBSD */
+
 #ifndef ITT_PLATFORM
 #  if ITT_OS==ITT_OS_WIN
 #    define ITT_PLATFORM ITT_PLATFORM_WIN
@@ -69,6 +68,8 @@
 #    define ITT_PLATFORM ITT_PLATFORM_MAC
 #  elif ITT_OS==ITT_OS_FREEBSD
 #    define ITT_PLATFORM ITT_PLATFORM_FREEBSD
+#  elif ITT_OS==ITT_OS_OPENBSD
+#    define ITT_PLATFORM ITT_PLATFORM_OPENBSD
 #  else
 #    define ITT_PLATFORM ITT_PLATFORM_POSIX
 #  endif
@@ -168,22 +169,6 @@
 #  define ITT_ARCH_ARM64  6
 #endif /* ITT_ARCH_ARM64 */
 
-#ifndef ITT_ARCH_LOONGARCH64
-#  define ITT_ARCH_LOONGARCH64  7
-#endif /* ITT_ARCH_LOONGARCH64 */
-
-#ifndef ITT_ARCH_S390X
-#  define ITT_ARCH_S390X  8
-#endif /* ITT_ARCH_S390X */
-
-#ifndef ITT_ARCH_HPPA
-#  define ITT_ARCH_HPPA  9
-#endif /* ITT_ARCH_HPPA */
-
-#ifndef ITT_ARCH_RISCV64
-#  define ITT_ARCH_RISCV64  10
-#endif /* ITT_ARCH_RISCV64 */
-
 #ifndef ITT_ARCH
 #  if defined _M_IX86 || defined __i386__
 #    define ITT_ARCH ITT_ARCH_IA32
@@ -197,16 +182,7 @@
 #    define ITT_ARCH ITT_ARCH_ARM64
 #  elif defined __powerpc64__
 #    define ITT_ARCH ITT_ARCH_PPC64
-#  elif defined __loongarch__
-#    define ITT_ARCH ITT_ARCH_LOONGARCH64
-#  elif defined __s390__ || defined __s390x__
-#    define ITT_ARCH ITT_ARCH_S390X
-#  elif defined __hppa__
-#    define ITT_ARCH ITT_ARCH_HPPA
-#  elif defined __riscv && __riscv_xlen == 64
-#    define ITT_ARCH ITT_ARCH_RISCV64
 #  endif
-
 #endif
 
 #ifdef __cplusplus
@@ -232,10 +208,10 @@
 #define ITT_MAGIC { 0xED, 0xAB, 0xAB, 0xEC, 0x0D, 0xEE, 0xDA, 0x30 }
 
 /* Replace with snapshot date YYYYMMDD for promotion build. */
-#define API_VERSION_BUILD    20180723
+#define API_VERSION_BUILD    20230630
 
 #ifndef API_VERSION_NUM
-#define API_VERSION_NUM 3.23.0
+#define API_VERSION_NUM 3.24.2
 #endif /* API_VERSION_NUM */
 
 #define API_VERSION "ITT-API-Version " ITT_TO_STR(API_VERSION_NUM) \
@@ -364,7 +340,7 @@ __itt_interlocked_compare_exchange(volatile long* ptr, long exchange, long compe
 #ifdef __INTEL_COMPILER
 #define __TBB_machine_fetchadd4(addr, val) __fetchadd4_acq((void *)addr, val)
 #else  /* __INTEL_COMPILER */
-#define __TBB_machine_fetchadd4(addr, val) __sync_fetch_and_add(addr, val)
+/* TODO: Add Support for not Intel compilers for IA-64 architecture */
 #endif /* __INTEL_COMPILER */
 #elif ITT_ARCH==ITT_ARCH_IA32 || ITT_ARCH==ITT_ARCH_IA32E /* ITT_ARCH!=ITT_ARCH_IA64 */
 ITT_INLINE long
@@ -494,6 +470,7 @@ typedef struct __itt_counter_info
 struct ___itt_domain;
 struct ___itt_string_handle;
 struct ___itt_histogram;
+struct ___itt_counter_metadata;
 
 #include "ittnotify.h"
 
@@ -520,6 +497,7 @@ typedef struct ___itt_global
     __itt_counter_info_t*  counter_list;
     unsigned int           ipt_collect_events;
     struct ___itt_histogram* histogram_list;
+    struct ___itt_counter_metadata* counter_metadata_list;
 } __itt_global;
 
 #pragma pack(pop)
@@ -674,6 +652,7 @@ typedef struct ___itt_global
         h->y_type = y_type; \
         h->extra1 = 0; \
         h->extra2 = NULL; \
+        h->next   = NULL; \
         if (h_tail == NULL) \
             (gptr)->histogram_list = h; \
         else \
@@ -693,8 +672,65 @@ typedef struct ___itt_global
         h->y_type = y_type; \
         h->extra1 = 0; \
         h->extra2 = NULL; \
+        h->next   = NULL; \
         if (h_tail == NULL) \
             (gptr)->histogram_list = h; \
+        else \
+            h_tail->next = h; \
+    } \
+}
+
+#define NEW_COUNTER_METADATA_NUM(gptr,h,h_tail,counter,type,value) { \
+    h = (__itt_counter_metadata*)malloc(sizeof(__itt_counter_metadata)); \
+    if (h != NULL) { \
+        h->counter = counter; \
+        h->type = type; \
+        h->str_valueA = NULL; \
+        h->str_valueW = NULL; \
+        h->value = value; \
+        h->extra1 = 0; \
+        h->extra2 = NULL; \
+        h->next   = NULL; \
+        if (h_tail == NULL) \
+            (gptr)->counter_metadata_list = h; \
+        else \
+            h_tail->next = h; \
+    } \
+}
+
+#define NEW_COUNTER_METADATA_STR_A(gptr,h,h_tail,counter,type,str_valueA) { \
+    h = (__itt_counter_metadata*)malloc(sizeof(__itt_counter_metadata)); \
+    if (h != NULL) { \
+        h->counter = counter; \
+        h->type = type; \
+        char *str_value_copy = NULL; \
+        __itt_fstrdup(str_valueA, str_value_copy); \
+        h->str_valueA = str_value_copy; \
+        h->str_valueW = NULL; \
+        h->value = 0; \
+        h->extra1 = 0; \
+        h->extra2 = NULL; \
+        h->next   = NULL; \
+        if (h_tail == NULL) \
+            (gptr)->counter_metadata_list = h; \
+        else \
+            h_tail->next = h; \
+    } \
+}
+
+#define NEW_COUNTER_METADATA_STR_W(gptr,h,h_tail,counter,type,str_valueW) { \
+    h = (__itt_counter_metadata*)malloc(sizeof(__itt_counter_metadata)); \
+    if (h != NULL) { \
+        h->counter = counter; \
+        h->type = type; \
+        h->str_valueA = NULL; \
+        h->str_valueW = str_valueW ? _wcsdup(str_valueW) : NULL; \
+        h->value = 0; \
+        h->extra1 = 0; \
+        h->extra2 = NULL; \
+        h->next   = NULL; \
+        if (h_tail == NULL) \
+            (gptr)->counter_metadata_list = h; \
         else \
             h_tail->next = h; \
     } \
